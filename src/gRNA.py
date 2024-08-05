@@ -44,14 +44,9 @@ def parse_hd(hd_text):
     return position_start, position_end, features
 
 def parse_ar(text):
-    # Define the regular expression pattern to match the sequence line
     pattern = r"Query\s+\d+\s+([A-Z]+)\s+\d+"
-    
-    # Search for the pattern in the text
     match = re.search(pattern, text)
-    
     if match:
-        # Extract and return the sequence
         sequence = match.group(1)
         return sequence
     else:
@@ -60,17 +55,14 @@ def parse_ar(text):
 def transform_csv(input_csv, output_csv):
     with open(input_csv, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
-        results = []
-        
+        results = []   
         for row in reader:
             dlfRow = row['dlfRow']
             hd = row['hd']
             ar = row['ar']
-            
             position_start, position_end, features = parse_hd(hd)
             sequence_alignment = parse_ar(ar)
             features_str = '; '.join(features)
-            
             results.append({
                 'Chromosome location': process_chr(dlfRow),
                 'Sequence alignment': sequence_alignment,
@@ -82,7 +74,6 @@ def transform_csv(input_csv, output_csv):
     with open(output_csv, 'w', newline='') as csvfile:
         fieldnames = ['Chromosome location', 'Sequence alignment', 'Position start', 'Position end', 'Proteins']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
         writer.writeheader()
         for result in results:
             writer.writerow(result)
@@ -96,66 +87,46 @@ def index():
 @gRNA_blueprint.route('/process', methods=['GET', 'POST'])
 def process():
     sequence = request.form['text']
-
     if sequence:
         try:
             driver.get(url)
-
             sequence_textarea = WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.ID, "seq"))
             )
             sequence_textarea.send_keys(sequence)  
-
             blast_button = WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.XPATH, "//div[@id='blastButton1']/input[@class='blastbutton']"))
             )
             blast_button.click()
-
             format_organism_input = WebDriverWait(driver, 120).until(
                 EC.presence_of_element_located((By.ID, "qorganism"))
             )
-
             link_to_click = WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.XPATH, "//tr[@ind='1']//a[@class='deflnDesc']"))
             )
             link_to_click.click()
-
-            # Scroll down to load the elements and wait for 2 seconds
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
-
-            # Initialize an empty list to hold the results
             results = []
-
-            # Locate all elements with the class 'oneSeqAln'
             one_seq_alns = WebDriverWait(driver, 20).until(
                 EC.presence_of_all_elements_located((By.CLASS_NAME, 'oneSeqAln'))
             )
 
             for one_seq_aln in one_seq_alns:
                 try:
-                    # Extract the dlfRow text
                     dlf_row = one_seq_aln.find_element(By.CLASS_NAME, 'dlfRow').text
 
-                    # Find all hd and ar elements within this oneSeqAln
                     hd_elements = one_seq_aln.find_elements(By.XPATH, ".//div[contains(@id, 'hd_')]")
                     ar_elements = one_seq_aln.find_elements(By.XPATH, ".//div[contains(@id, 'ar_')]")
-
-                    # Create a list of pairs of hd and ar texts
                     hd_ar_pairs = []
                     for hd_element, ar_element in zip(hd_elements, ar_elements):
                         hd_text = hd_element.text
                         ar_text = ar_element.text
                         hd_ar_pairs.append({'hd': hd_text, 'ar': ar_text})
-
-                    # Append the dlfRow text and the list of hd_ar pairs to the results
                     results.append({'dlfRow': dlf_row, 'hd_ar_pairs': hd_ar_pairs})
                 except Exception as e:
                     print(f"Error processing oneSeqAln: {e}")
 
-
-
-            # Save the results to a CSV file
             with open('blast_.csv', 'w', newline='') as csvfile:
                 fieldnames = ['dlfRow', 'hd', 'ar']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
