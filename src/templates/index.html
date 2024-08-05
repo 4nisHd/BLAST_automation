@@ -108,6 +108,10 @@
         <input type="text" id="text_input" name="text" required>
         <button type="submit">Submit</button>
     </form>
+    <!-- Hide this initially -->
+    <a href="/generate-pdf" download id="download-button" style="display: none;">
+        <button>Download report</button>
+    </a>
     <div class="loading" id="loading">
         <div class="spinner"></div>
         Loading...
@@ -120,6 +124,7 @@
                 e.preventDefault();
                 $('#loading').show();
                 $('#result-table').empty();
+                $('#download-button').hide();  // Hide the download button while loading
                 $.ajax({
                     type: 'POST',
                     url: '/process',
@@ -127,10 +132,12 @@
                     success: function(response){
                         $('#loading').hide();
                         $('#result-table').html(response.Sequences);
+                        $('#download-button').show();  // Show the download button after loading
                     },
                     error: function() {
                         $('#loading').hide();
                         $('#result-table').html('<p>Error processing request</p>');
+                        $('#download-button').hide();  // Hide the download button on error
                     }
                 });
             });
