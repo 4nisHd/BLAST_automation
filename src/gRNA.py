@@ -1,4 +1,4 @@
-from flask import Blueprint, request, render_template,jsonify,Flask,send_file 
+from flask import Blueprint, request, render_template,jsonify,Flask
 import csv
 import time
 from selenium import webdriver
@@ -7,9 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import pandas as pd
 import re
-from fpdf import FPDF
-import io 
-import os 
+
 
 
 gRNA_blueprint = Blueprint('gRNA', __name__,template_folder='templates')
@@ -152,34 +150,3 @@ def process():
     else:
         return jsonify({'error':KeyError})
 
-
-@gRNA_blueprint.route('/generate-pdf', methods=['GET'])
-def generate_pdf():
-    csv_file_path = r'C:\Users\Anis\Desktop\Crispr model\off_target\transformed_blast.csv'  # Update with the path to your CSV file
-    
-    if not os.path.exists(csv_file_path):
-        return 'CSV file not found', 404
-
-    # Read the CSV file into a DataFrame
-    df = pd.read_csv(csv_file_path)
-
-    # Create a PDF object
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 12)
-    
-    # Add a title
-    pdf.cell(200, 10, txt="CSV Data", ln=True, align='C')
-    
-    # Add the data from DataFrame to the PDF
-    pdf.set_font('Arial', '', 10)
-    for i, row in df.iterrows():
-        pdf.cell(200, 10, txt=', '.join(map(str, row.values)), ln=True)
-    
-    # Save PDF to a BytesIO object
-    pdf_output = io.BytesIO()
-    pdf_output.write(pdf.output(dest='S').encode('latin1'))  # Encode PDF output to bytes
-    pdf_output.seek(0)  # Reset pointer to the start of the BytesIO object
-
-    # Send the PDF file
-    return send_file(pdf_output, as_attachment=True, download_name='output.pdf', mimetype='application/pdf')
