@@ -1,54 +1,49 @@
-from flask import Flask, send_file, Blueprint
+from flask import Flask, send_file, Blueprint, make_response
 from fpdf import FPDF
 import io
 import os
 import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 import time
+import concurrent.futures
+import requests
 
 app = Flask(__name__)
 
 report_blueprint = Blueprint('report_blueprint', __name__, template_folder='templates')
 
-
 def extract_position(row):
     chromosome, start, end = row[0].split()[-1], row[2], row[3]
     return f"chr{chromosome}:{start}-{end}"
 
+def fetch_genome_image_ucsc(position):
+    ucsc_url = "https://genome.ucsc.edu/cgi-bin/hgRenderTracks"
+    params = {
+        'db': 'hg38',
+        'position': position,
+        'pix': 800,
+        'hgt.trackLabel': 'on',
+        'hgt.trackLabelType': 'shortLabel',
+        'hgt.dinkey': 'text',
+        'hgt.imageV1': '1',
+        'hgt.psOutput': 'png'
+    }
+    
+    response = requests.get(ucsc_url, params=params)
+    
+    if response.status_code == 200:
+        return response.content
+    else:
+        raise Exception(f"Failed to fetch image from UCSC API: {response.status_code}")
 
-def fetch_genome_image(position):
-    options = Options()
-    options.headless = True
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-
-    try:
-        driver.get('https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr3%3A174187152%2D174187170&hgsid=2326089496_hvkPuryWkwOQObK7SCsBmdjUJ4Hh')
-        
-        position_input = driver.find_element(By.ID, 'positionInput')
-        position_input.clear()
-        position_input.send_keys(position)
-        
-        go_button = driver.find_element(By.ID, 'goButton')
-        go_button.click()
-
-        time.sleep(5)
-
-        image_element = driver.find_element(By.ID, 'chrom')
-        image_src = image_element.get_attribute('src')
-
-        driver.get(image_src)
-        image_data = driver.page_source
-
-    finally:
-        driver.quit()
-
-    return image_data
-
+def generate_image_data(row, idx):
+    position = extract_position(row)
+    image_data = fetch_genome_image_ucsc(position)
+    
+    image_path = f'./temp/temp_image_{idx}.png'
+    with open(image_path, 'wb') as img_file:
+        img_file.write(image_data)
+    
+    return image_path
 
 @report_blueprint.route('/generate-pdf', methods=['GET'])
 def generate_pdf():
@@ -65,26 +60,28 @@ def generate_pdf():
     pdf.cell(200, 10, txt="CSV Data with Genome Images", ln=True, align='C')
     
     pdf.set_font('Arial', '', 10)
-    for i, row in df.iterrows():
-        pdf.cell(200, 10, txt=', '.join(map(str, row.values)), ln=True)
-        
-        position = extract_position(row)
-        image_data = fetch_genome_image(position)
-        
-        image_path = f'temp_image_{i}.png'
-        with open(image_path, 'wb') as img_file:
-            img_file.write(image_data)
 
-        pdf.image(image_path, x=10, y=None, w=200)
-        
-        os.remove(image_path)
-    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_row = {executor.submit(generate_image_data, row, i): (row, i) for i, row in df.iterrows()}
+        for future in concurrent.futures.as_completed(future_to_row):
+            row, idx = future_to_row[future]
+            try:
+                image_path = future.result()
+                pdf.cell(200, 10, txt=', '.join(map(str, row.values)), ln=True)
+                pdf.image(image_path, x=10, y=None, w=200)
+                os.remove(image_path)
+            except Exception as e:
+                print(f"Error processing row {idx}: {e}")
+
     pdf_output = io.BytesIO()
     pdf_output.write(pdf.output(dest='S').encode('latin1'))
     pdf_output.seek(0)
 
-    return send_file(pdf_output, as_attachment=True, download_name='output.pdf', mimetype='application/pdf')
+    response = make_response(pdf_output.getvalue())
+    response.headers.set('Content-Disposition', 'attachment', filename='output.pdf')
+    response.headers.set('Content-Type', 'application/pdf')
 
+    return response
 
 app.register_blueprint(report_blueprint)
 
