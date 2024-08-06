@@ -124,7 +124,7 @@
                 e.preventDefault();
                 $('#loading').show();
                 $('#result-table').empty();
-                $('#download-button').hide();  // Hide the download button while loading
+                $('#download-button').hide();  
                 $.ajax({
                     type: 'POST',
                     url: '/process',
@@ -132,12 +132,12 @@
                     success: function(response){
                         $('#loading').hide();
                         $('#result-table').html(response.Sequences);
-                        $('#download-button').show();  // Show the download button after loading
+                        $('#download-button').show();  
                     },
                     error: function() {
                         $('#loading').hide();
                         $('#result-table').html('<p>Error processing request</p>');
-                        $('#download-button').hide();  // Hide the download button on error
+                        $('#download-button').hide();  
                     }
                 });
             });
