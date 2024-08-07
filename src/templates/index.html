@@ -108,7 +108,6 @@
         <input type="text" id="text_input" name="text" required>
         <button type="submit">Submit</button>
     </form>
-    <!-- Hide this initially -->
     <a href="/generate-pdf" download id="download-button" style="display: none;">
         <button>Download report</button>
     </a>
@@ -139,7 +138,7 @@
                         $('#result-table').html('<p>Error processing request</p>');
                         $('#download-button').hide();  
                     }
-                });
+                });            
             });
         });
     </script>
